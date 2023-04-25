@@ -5,3 +5,11 @@ body,
     margin: 0;
     padding: 0;
 }
+
+.result-latex {
+    height: 30px;
+}
+
+.result-latex .katex {
+    font-size: 1.5em;
+}

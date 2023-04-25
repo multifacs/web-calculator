@@ -8,6 +8,6 @@ export const MainRouter = (
             const RouteElement = page.component;
             return <Route key={`route_${page.route}`} path={`${page.route}`} element={<RouteElement />} />;
         })}
-        <Route path={'*'} element={<Navigate to={'/'} />} />
+        <Route path={'*'} element={<Navigate to={'/web-calculator'} />} />
     </>
 );

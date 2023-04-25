@@ -1,9 +1,7 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import React, { useCallback, useState } from 'react';
 import { AppBar, IconButton, Toolbar, Typography, Box, useTheme, useMediaQuery, Button, TextField } from '@mui/material';
-// import { EmptyState } from '@brightlayer-ui/react-components';
 import Menu from '@mui/icons-material/Menu';
-// import Event from '@mui/icons-material/Event';
 import * as Yup from 'yup';
 import { Controller, useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -50,7 +48,6 @@ type RootsType = {
 const roundTo = (x: number, n: number): number => Math.round(x * 10 ** n) / 10 ** n
 
 const getRoots = (a: number, b: number, c: number): RootsType => {
-
     const n = 3;
 
     const d = b * b - 4 * a * c;
@@ -82,9 +79,9 @@ const getRoots = (a: number, b: number, c: number): RootsType => {
 
 const getSolution = (root1: any, root2: any, negativeSum: boolean): string => {
     if (negativeSum) {
-        return `y0 = C1${root1.wholePart ? ` * e^${root1.wholePart}x` : ""} * cos(${root1.imaginaryPart}x) + C2${root2.wholePart ? `* e^${root2.wholePart}x` : ""} * sin(${root2.imaginaryPart}x)`
+        return `$$y_0 = C_1${root1.wholePart ? ` \\cdot e^{${root1.wholePart}x` : ""}} \\cdot \\cos(${root1.imaginaryPart}x) + C_2${root2.wholePart ? `\\cdot e^{${root2.wholePart}x` : ""}} \\cdot \\sin(${root2.imaginaryPart}x)$$`
     }
-    return `y0 = C1${root1.wholePart ? ` * e` + `^${root1.wholePart}x` : ""} + C2${root2.wholePart ? ` * e` + `^${root2.wholePart}x` : ""}`
+    return `$$y_0 = C_1${root1.wholePart ? ` \\cdot e` + `^{${root1.wholePart}x` : ""}} + C_2${root2.wholePart ? ` \\cdot e` + `^{${root2.wholePart}}x$$` : ""}`
 }
 
 export const PageTwo = (): JSX.Element => {
@@ -100,8 +97,6 @@ export const PageTwo = (): JSX.Element => {
     const [resultString, setResultString] = useState(" ")
 
     const onSubmit = ({ s, p, q }: Equation): void => {
-        // eslint-disable-next-line no-console
-
         const roots = getRoots(parseInt(s), parseInt(p), parseInt(q))
         setResultString(getSolution(roots.root1, roots.root2, roots.negativeSum))
     };
@@ -140,17 +135,13 @@ export const PageTwo = (): JSX.Element => {
             </AppBar>
             <Box sx={{ flex: '1 1 0px', display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
                 <form onSubmit={handleSubmit(onSubmit)}>
-                    <Box sx={{ flex: '1 1 0px', display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
-                        <Box sx={{ width: '50%', marginBottom: '50px', display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
-                            <p>
-                                При изучении физических явлений часто не удается непосредственно найти законы, связывающие физические величины, но сравнительно легко устанавливается зависимость между теми же величинами, их производными или дифференциалами.
-                                Таким образом, большинство физических явлений описывается на языке дифференциальных уравнений, содержащих неизвестные функции под знаком производной или дифференциала.
-                            </p>
-                            <p>
-                                <strong>Линейное однородное дифференциально уравнение второго порядка</strong> описывается уравнением:
-                            </p>
+                    <Box sx={{ flex: '1 1 0px', display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', gap: '20px' }}>
+                        <Box sx={{ width: '90%', display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
+                            <h3 style={{ textAlign: 'justify' }}>
+                                Линейное однородное дифференциальное уравнение второго порядка
+                            </h3>
                             <Latex>$$y&apos;&apos; + py&apos; + qy = 0$$</Latex>
-                            <p> где p,q − постоянные числа. Ниже можно произвести автоматический расчет общего решения ЛОДУ.
+                            <p style={{ textAlign: 'justify' }}> где <Latex>$$p, q$$</Latex> — постоянные числа.
                             </p>
                         </Box>
                         <Box sx={{ flex: '1 1 0px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '5px' }}>
@@ -175,7 +166,7 @@ export const PageTwo = (): JSX.Element => {
                                     />
                                 )}
                             />
-                            <p>y&quot; + </p>
+                            <Latex>$$y&apos;&apos; +$$ </Latex>
                             <Controller
                                 control={control}
                                 name="p"
@@ -197,7 +188,7 @@ export const PageTwo = (): JSX.Element => {
                                     />
                                 )}
                             />
-                            <p> y&apos;+ </p>
+                            <Latex> $$y&apos;+$$ </Latex>
                             <Controller
                                 control={control}
                                 name="q"
@@ -219,15 +210,17 @@ export const PageTwo = (): JSX.Element => {
                                     />
                                 )}
                             />
-                            <p> = 0</p>
+                            <Latex>$$y = 0$$</Latex>
                         </Box>
-                        <h1>{resultString}</h1>
+                        <div className="result-latex">
+                            <Latex>{resultString}</Latex>
+                        </div>
                         <Box sx={{ flex: '1 1 0px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                            <Button type="reset" onClick={(): void => reset()}>
-                                Сброс
-                            </Button>
                             <Button type="submit">
                                 Решить
+                            </Button>
+                            <Button type="reset" onClick={(): void => reset()}>
+                                Сброс
                             </Button>
                         </Box>
                     </Box>

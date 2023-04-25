@@ -1,11 +1,46 @@
-import React, { useState } from 'react';
+/* eslint-disable @typescript-eslint/no-misused-promises */
+import React, { useState, useCallback } from 'react';
 import Plot from 'react-plotly.js';
-// import { pow } from 'mathjs';
-import { AppBar, IconButton, Toolbar, Typography, Box, useTheme, useMediaQuery } from '@mui/material';
-// import { EmptyState } from '@brightlayer-ui/react-components';
+import { AppBar, IconButton, Toolbar, Typography, Box, useTheme, useMediaQuery, TextField, Button } from '@mui/material';
 import Menu from '@mui/icons-material/Menu';
-// import Event from '@mui/icons-material/Event';
 import { useDrawer } from '../contexts/drawerContextProvider';
+import * as Yup from 'yup';
+import { Controller, useForm } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
+import Latex from 'react-latex'
+
+type IntegralParams = {
+    a: string,
+    b: string,
+    n: string,
+    f: string
+}
+
+const defaultValues: IntegralParams = {
+    a: "1",
+    b: "10",
+    n: "10",
+    f: "Math.pow(x, 2)",
+};
+
+const validationSchema = Yup.object().shape({
+    a: Yup
+        .number()
+        .required('Неправильный формат')
+        .typeError('Неправильный формат'),
+    b: Yup
+        .number()
+        .required('Неправильный формат')
+        .typeError('Неправильный формат'),
+    n: Yup
+        .number()
+        .required('Неправильный формат')
+        .typeError('Неправильный формат'),
+    f: Yup
+        .string()
+        .required('Неправильный формат')
+        .typeError('Неправильный формат'),
+});
 
 type RiemannResult = {
     sum: number,
@@ -61,30 +96,37 @@ export const PageOne = (): JSX.Element => {
     const { setDrawerOpen } = useDrawer();
     const md = useMediaQuery(theme.breakpoints.up('md'));
 
-    const [funcBody, setFuncBody] = useState('Math.pow(x, 2)')
-    const [paramA, setParamA] = useState(0)
-    const [paramB, setParamB] = useState(5)
-    const [paramN, setParamN] = useState(5)
     const [data, setData] = useState<any[]>([])
-    const [sum, setSum] = useState(0)
+    const [sum, setSum] = useState<number>(0)
 
-    const handleChangeA = (e: React.ChangeEvent<HTMLInputElement>): void => {
-        setParamA(parseInt(e.target.value))
+    const { handleSubmit, reset, control, setValue } = useForm<IntegralParams>({
+        defaultValues: defaultValues,
+        resolver: yupResolver(validationSchema),
+    });
+
+    const onAChange = useCallback((evt: React.ChangeEvent<HTMLInputElement>) => {
+        setValue('a', evt.target.value)
+    }, []);
+    const onBChange = useCallback((evt: React.ChangeEvent<HTMLInputElement>) => {
+        setValue('b', evt.target.value)
+    }, []);
+    const onNChange = useCallback((evt: React.ChangeEvent<HTMLInputElement>) => {
+        setValue('n', evt.target.value)
+    }, []);
+    const onFChange = useCallback((evt: React.ChangeEvent<HTMLInputElement>) => {
+        setValue('f', evt.target.value)
+    }, []);
+
+    const onReset = (): void => {
+        reset()
+        while (data.length > 0) {
+            data.pop();
+        }
+        setData(JSON.parse(JSON.stringify(data)))
+        setSum(0)
     }
 
-    const handleChangeB = (e: React.ChangeEvent<HTMLInputElement>): void => {
-        setParamB(parseInt(e.target.value))
-    }
-
-    const handleChangeN = (e: React.ChangeEvent<HTMLInputElement>): void => {
-        setParamN(parseInt(e.target.value))
-    }
-
-    const handleChangeFuncBody = (e: React.ChangeEvent<HTMLInputElement>): void => {
-        setFuncBody(e.target.value)
-    }
-
-    const updateGraph = (): void => {
+    const updateGraph = (funcBody: string, a: number, b: number, n: number): void => {
         let canProceedFlag = true
         // Define the function to integrate
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -107,7 +149,7 @@ export const PageOne = (): JSX.Element => {
         }> = []
 
         const updateArea = (): void => {
-            const result = riemannSum(f, paramA, paramB, paramN, "mid");
+            const result = riemannSum(f, a, b, n, "mid");
             setSum(result.sum)
             vals = result.vals
         }
@@ -117,7 +159,7 @@ export const PageOne = (): JSX.Element => {
         if (canProceedFlag) {
             const x = [];
             const y = [];
-            for (let i = paramA - 1; i <= paramB + 1; i += (paramB - paramA) / paramN) {
+            for (let i = a - 1; i <= b + 1; i += (b - a) / n) {
                 x.push(i);
                 y.push(f(i));
             }
@@ -160,6 +202,21 @@ export const PageOne = (): JSX.Element => {
         }
     }
 
+    const onSubmit = ({ a, b, n, f }: IntegralParams): void => {
+        const params = {
+            a: parseInt(a),
+            b: parseInt(b),
+            n: parseInt(n),
+            f,
+        }
+        updateGraph(
+            params.f,
+            params.a,
+            params.b,
+            params.n,
+        )
+    };
+
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <AppBar position={'sticky'}>
@@ -178,24 +235,114 @@ export const PageOne = (): JSX.Element => {
                         </IconButton>
                     )}
                     <Typography variant={'h6'} color={'inherit'}>
-                        Считаем интеграл суммой Римана
+                        Интегралы
                     </Typography>
                 </Toolbar>
             </AppBar>
             <Box sx={{ flex: '1 1 0px', display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
-                <input type='text' placeholder='func' value={funcBody} onChange={handleChangeFuncBody}></input>
-                <h3>f(x) = {funcBody}</h3>
-                <h3>Площадь = {roundTo(sum, 3)}</h3>
-                <div className='inputs'>
-                    <input type='text' placeholder='a' value={paramA} onChange={handleChangeA}></input>
-                    <input type='text' placeholder='b' value={paramB} onChange={handleChangeB}></input>
-                    <input type='text' placeholder='n' value={paramN} onChange={handleChangeN}></input>
-                </div>
-                <button onClick={updateGraph}>Посчитать</button>
-                <Plot
-                    data={data}
-                    layout={{ width: 600, height: 400 }}
-                />
+                <form onSubmit={handleSubmit(onSubmit)}>
+                    <Box sx={{ flex: '1 1 0px', display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', gap: '5px' }}>
+                        <Box sx={{ width: '90%', display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
+                            <h3>Считаем интеграл суммой Римана</h3>
+                            <p style={{ textAlign: 'justify' }}>
+                                Введите функцию в синтаксисе JavaScript и параметры интегрирования:
+                            </p>
+                            <Controller
+                                control={control}
+                                name="f"
+                                render={({ field, fieldState: { error } }): any => (
+                                    <TextField id="outlined-basic"
+                                        label="f(x)"
+                                        variant="outlined"
+                                        onChange={onFChange}
+                                        value={field.value}
+                                        type="text"
+                                        error={error?.message ? true : false}
+                                        helperText={error?.message}
+                                    />
+                                )}
+                            />
+                        </Box>
+                        <Box sx={{ flex: '1 1 0px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '5px' }}>
+                            <Controller
+                                control={control}
+                                name="a"
+                                render={({ field, fieldState: { error } }): any => (
+                                    <TextField id="outlined-basic"
+                                        label="a"
+                                        variant="outlined"
+                                        onChange={onAChange}
+                                        value={field.value}
+                                        type="text"
+                                        error={error?.message ? true : false}
+                                        helperText={error?.message}
+                                        FormHelperTextProps={{
+                                            sx: {
+                                                position: "absolute",
+                                                top: '60px'
+                                            }
+                                        }}
+                                    />
+                                )}
+                            />
+                            <Controller
+                                control={control}
+                                name="b"
+                                render={({ field, fieldState: { error } }): any => (
+                                    <TextField id="outlined-basic"
+                                        label="b"
+                                        variant="outlined"
+                                        onChange={onBChange}
+                                        value={field.value}
+                                        type="text"
+                                        error={error?.message ? true : false}
+                                        helperText={error?.message}
+                                        FormHelperTextProps={{
+                                            sx: {
+                                                position: "absolute",
+                                                top: '60px'
+                                            }
+                                        }}
+                                    />
+                                )}
+                            />
+                            <Controller
+                                control={control}
+                                name="n"
+                                render={({ field, fieldState: { error } }): any => (
+                                    <TextField id="outlined-basic"
+                                        label="n"
+                                        variant="outlined"
+                                        onChange={onNChange}
+                                        value={field.value}
+                                        type="text"
+                                        error={error?.message ? true : false}
+                                        helperText={error?.message}
+                                        FormHelperTextProps={{
+                                            sx: {
+                                                position: "absolute",
+                                                top: '60px'
+                                            }
+                                        }}
+                                    />
+                                )}
+                            />
+                        </Box>
+                        <p>Площадь <Latex>{`$$ = ${roundTo(sum, 3)}$$`}</Latex></p>
+                        <Plot
+                            data={data}
+                            layout={{ width: 600, height: 400 }}
+                        />
+                        <Box sx={{ flex: '1 1 0px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                            <Button type="submit">
+                                Решить
+                            </Button>
+                            <Button type="reset" onClick={(): void => onReset()}>
+                                Сброс
+                            </Button>
+                        </Box>
+                    </Box>
+                </form>
             </Box>
         </Box>
     );

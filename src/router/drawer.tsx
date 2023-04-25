@@ -34,7 +34,7 @@ export const NavigationDrawer: React.FC = () => {
             activeItem={selected}
         >
             <DrawerHeader
-                title={'Brightlayer UI'}
+                title={'Калькулятор'}
                 subtitle={'React Project'}
                 icon={<Menu />}
                 onIconClick={(): void => {

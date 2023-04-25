@@ -6,19 +6,19 @@ import LooksTwo from '@mui/icons-material/LooksTwo';
 export const PAGES = [
     {
         title: 'Домашнаяя страница',
-        route: '',
+        route: 'web-calculator',
         component: HomePage,
         icon: Home,
     },
     {
         title: 'Калькулятор интегралов',
-        route: 'page-one',
+        route: 'web-calculator/page-one',
         component: PageOne,
         icon: LooksOne,
     },
     {
-        title: 'Калькулятор СЛАУ',
-        route: 'page-two',
+        title: 'Калькулятор ДУ',
+        route: 'web-calculator/page-two',
         component: PageTwo,
         icon: LooksTwo,
     },
