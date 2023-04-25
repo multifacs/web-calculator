@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import React, { useState, useCallback } from 'react';
 import Plot from 'react-plotly.js';
-import { AppBar, IconButton, Toolbar, Typography, Box, useTheme, useMediaQuery, TextField, Button } from '@mui/material';
+import { AppBar, IconButton, Toolbar, Typography, Box, useTheme, useMediaQuery, TextField, Button, Select, MenuItem, InputLabel, FormControl, Slider, InputAdornment, Grid } from '@mui/material';
+import { SelectChangeEvent } from '@mui/material/Select';
 import Menu from '@mui/icons-material/Menu';
 import { useDrawer } from '../contexts/drawerContextProvider';
 import * as Yup from 'yup';
@@ -13,7 +14,9 @@ type IntegralParams = {
     a: string,
     b: string,
     n: string,
-    f: string
+    f: string,
+    method: string,
+    roundTo: number,
 }
 
 const defaultValues: IntegralParams = {
@@ -21,6 +24,8 @@ const defaultValues: IntegralParams = {
     b: "10",
     n: "10",
     f: "Math.pow(x, 2)",
+    method: "mid",
+    roundTo: 3,
 };
 
 const validationSchema = Yup.object().shape({
@@ -40,6 +45,15 @@ const validationSchema = Yup.object().shape({
         .string()
         .required('Неправильный формат')
         .typeError('Неправильный формат'),
+    method: Yup
+        .string()
+        .matches(/(mid|left|right|trapez)/)
+        .required('Неправильный формат')
+        .typeError('Неправильный формат'),
+    roundTo: Yup
+        .number()
+        .required('Неправильный формат')
+        .typeError('Неправильный формат'),
 });
 
 type RiemannResult = {
@@ -51,7 +65,7 @@ type RiemannResult = {
     }>,
 }
 
-const riemannSum = (f: any, a: number, b: number, n: number, method: string): RiemannResult | any => {
+const calculateIntegral = (f: any, a: number, b: number, n: number, method: string): RiemannResult | any => {
     const vals = []
     const dx = (b - a) / n;
     let sum = 0;
@@ -79,6 +93,15 @@ const riemannSum = (f: any, a: number, b: number, n: number, method: string): Ri
                 b: x + dx,
                 val: f(x + dx / 2)
             })
+        } else if (method === 'trapez') {
+            // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+            sum += (f(x) + f(x + dx)) / 2 * dx;
+            vals.push({
+                a: x,
+                b: x + dx,
+                valA: f(x),
+                valB: f(x + dx)
+            })
         } else {
             return null; // invalid method
         }
@@ -89,7 +112,20 @@ const riemannSum = (f: any, a: number, b: number, n: number, method: string): Ri
     };
 }
 
+const calculateReference = (f: any, a: number, b: number, n: number): number => {
+    const dx = (b - a) / n;
+    let sum = 0;
+    let x;
+    for (let i = 0; i < n; i++) {
+        x = a + i * dx;
+        sum += f(x + dx / 2) * dx;
+    }
+    return sum;
+}
+
 const roundTo = (num: number, n: number): number => Math.round(num * Math.pow(10, n)) / Math.pow(10, n)
+
+const REF_MAX_N = 1000000
 
 export const PageOne = (): JSX.Element => {
     const theme = useTheme();
@@ -98,11 +134,15 @@ export const PageOne = (): JSX.Element => {
 
     const [data, setData] = useState<any[]>([])
     const [sum, setSum] = useState<number>(0)
+    const [reference, setReference] = useState<number>(0)
 
-    const { handleSubmit, reset, control, setValue } = useForm<IntegralParams>({
+    const { handleSubmit, reset, control, setValue, getValues } = useForm<IntegralParams>({
         defaultValues: defaultValues,
         resolver: yupResolver(validationSchema),
     });
+
+    // eslint-disable-next-line no-console
+    console.log(getValues().roundTo)
 
     const onAChange = useCallback((evt: React.ChangeEvent<HTMLInputElement>) => {
         setValue('a', evt.target.value)
@@ -116,6 +156,14 @@ export const PageOne = (): JSX.Element => {
     const onFChange = useCallback((evt: React.ChangeEvent<HTMLInputElement>) => {
         setValue('f', evt.target.value)
     }, []);
+    const onMethodChange = useCallback((evt: SelectChangeEvent) => {
+        setValue('method', evt.target.value)
+    }, []);
+    const onRoundToChange = useCallback((evt: Event, value: number | number[]) => {
+        if (typeof value === 'number') {
+            setValue('roundTo', value)
+        }
+    }, []);
 
     const onReset = (): void => {
         reset()
@@ -124,9 +172,10 @@ export const PageOne = (): JSX.Element => {
         }
         setData(JSON.parse(JSON.stringify(data)))
         setSum(0)
+        setReference(0)
     }
 
-    const updateGraph = (funcBody: string, a: number, b: number, n: number): void => {
+    const updateGraph = (funcBody: string, method: string, a: number, b: number, n: number): void => {
         let canProceedFlag = true
         // Define the function to integrate
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -145,24 +194,47 @@ export const PageOne = (): JSX.Element => {
         let vals: Array<{
             a: number,
             b: number,
-            val: number | any
+            val?: number | any,
+            valA?: number,
+            valB?: number,
         }> = []
 
+
+
         const updateArea = (): void => {
-            const result = riemannSum(f, a, b, n, "mid");
+            const result = calculateIntegral(f, a, b, n, method);
             setSum(result.sum)
             vals = result.vals
+
+            const ref = calculateReference(f, a, b, REF_MAX_N)
+            setReference(ref)
         }
 
         updateArea()
 
         if (canProceedFlag) {
+            const offset = (b - a) / n
+            const beforeA = a - offset
+            const afterB = b + offset
             const x = [];
             const y = [];
-            for (let i = a - 1; i <= b + 1; i += (b - a) / n) {
-                x.push(i);
-                y.push(f(i));
+            for (let i = beforeA; i <= afterB + (0.000000001); i += offset) {
+                let calcX = i
+                let calcY = f(i)
+                if (Number.isNaN(calcY)) {
+                    calcX = 0
+                    calcY = 0
+                }
+                x.push(calcX);
+                y.push(calcY);
             }
+
+            // eslint-disable-next-line no-console
+            console.log(a, b, n, beforeA, afterB, offset)
+            // eslint-disable-next-line no-console
+            console.log(x)
+            // eslint-disable-next-line no-console
+            console.log(y)
 
             while (data.length > 0) {
                 data.pop();
@@ -173,49 +245,72 @@ export const PageOne = (): JSX.Element => {
                     x: x,
                     y: y,
                     mode: 'lines',
+                    name: 'f(x)',
                     line: {
-                        color: 'blue'
+                        color: 'blue',
+                        shape: 'spline',
+                        dash: 'dot',
                     },
                 },
                 {
                     x: x.slice(1, -1),
                     y: y.slice(1, -1),
                     mode: 'lines',
-                    name: 'f(x)',
+                    name: 'a-b interval',
                     line: {
-                        color: 'red'
+                        color: 'red',
+                        shape: 'spline',
                     },
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(0, 100, 255, 0.2)',
                 }
             )
 
-            vals.forEach((val) => {
-                data.push({
-                    x: [val.a, val.b, val.b, val.a],
-                    y: [0, 0, val.val, val.val],
-                    fill: 'toself',
-                    fillcolor: 'rgba(0, 255, 0, 0.5)',
-                    name: `Area`
+            if (method !== "trapez") {
+                vals.forEach((val, idx) => {
+                    data.push({
+                        x: [val.a, val.b, val.b, val.a, val.a],
+                        y: [0, 0, val.val, val.val, 0],
+                        fill: 'toself',
+                        fillcolor: 'rgba(100, 255, 0, 0.8)',
+                        name: `Rect #${idx}`,
+                        mode: 'lines',
+                    })
                 })
-            })
+            } else {
+                vals.forEach((val, idx) => {
+                    data.push({
+                        x: [val.a, val.b, val.b, val.a, val.a],
+                        y: [0, 0, val.valB, val.valA, 0],
+                        fill: 'toself',
+                        fillcolor: 'rgba(100, 255, 0, 0.8)',
+                        name: `Rect #${idx}`,
+                        mode: 'lines',
+                    })
+                })
+            }
 
             setData(JSON.parse(JSON.stringify(data)))
         }
     }
 
-    const onSubmit = ({ a, b, n, f }: IntegralParams): void => {
+    const onSubmit = ({ a, b, n, f, method }: IntegralParams): void => {
         const params = {
             a: parseInt(a),
             b: parseInt(b),
             n: parseInt(n),
             f,
+            method,
         }
         updateGraph(
             params.f,
+            params.method,
             params.a,
             params.b,
             params.n,
         )
     };
+
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -243,101 +338,182 @@ export const PageOne = (): JSX.Element => {
                 <form onSubmit={handleSubmit(onSubmit)}>
                     <Box sx={{ flex: '1 1 0px', display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', gap: '5px' }}>
                         <Box sx={{ width: '90%', display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
-                            <h3>Считаем интеграл суммой Римана</h3>
-                            <p style={{ textAlign: 'justify' }}>
-                                Введите функцию в синтаксисе JavaScript и параметры интегрирования:
-                            </p>
-                            <Controller
-                                control={control}
-                                name="f"
-                                render={({ field, fieldState: { error } }): any => (
-                                    <TextField id="outlined-basic"
-                                        label="f(x)"
-                                        variant="outlined"
-                                        onChange={onFChange}
-                                        value={field.value}
-                                        type="text"
-                                        error={error?.message ? true : false}
-                                        helperText={error?.message}
-                                    />
-                                )}
-                            />
+                            <h3>Приближенное вычисление определенных интегралов</h3>
                         </Box>
-                        <Box sx={{ flex: '1 1 0px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '5px' }}>
-                            <Controller
-                                control={control}
-                                name="a"
-                                render={({ field, fieldState: { error } }): any => (
-                                    <TextField id="outlined-basic"
-                                        label="a"
-                                        variant="outlined"
-                                        onChange={onAChange}
-                                        value={field.value}
-                                        type="text"
-                                        error={error?.message ? true : false}
-                                        helperText={error?.message}
-                                        FormHelperTextProps={{
-                                            sx: {
-                                                position: "absolute",
-                                                top: '60px'
-                                            }
-                                        }}
-                                    />
-                                )}
-                            />
-                            <Controller
-                                control={control}
-                                name="b"
-                                render={({ field, fieldState: { error } }): any => (
-                                    <TextField id="outlined-basic"
-                                        label="b"
-                                        variant="outlined"
-                                        onChange={onBChange}
-                                        value={field.value}
-                                        type="text"
-                                        error={error?.message ? true : false}
-                                        helperText={error?.message}
-                                        FormHelperTextProps={{
-                                            sx: {
-                                                position: "absolute",
-                                                top: '60px'
-                                            }
-                                        }}
-                                    />
-                                )}
-                            />
-                            <Controller
-                                control={control}
-                                name="n"
-                                render={({ field, fieldState: { error } }): any => (
-                                    <TextField id="outlined-basic"
-                                        label="n"
-                                        variant="outlined"
-                                        onChange={onNChange}
-                                        value={field.value}
-                                        type="text"
-                                        error={error?.message ? true : false}
-                                        helperText={error?.message}
-                                        FormHelperTextProps={{
-                                            sx: {
-                                                position: "absolute",
-                                                top: '60px'
-                                            }
-                                        }}
-                                    />
-                                )}
-                            />
-                        </Box>
-                        <p>Площадь <Latex>{`$$ = ${roundTo(sum, 3)}$$`}</Latex></p>
+                        <Grid container spacing={1} sx={{ width: '40%' }}>
+                            <Grid item xs={6}>
+                                <Controller
+                                    control={control}
+                                    name="f"
+                                    render={({ field, fieldState: { error } }): any => (
+                                        <FormControl sx={{ width: "100%" }}>
+                                            <TextField id="outlined-basic"
+                                                InputProps={{
+                                                    startAdornment: <InputAdornment position="start">f(x) = </InputAdornment>,
+                                                    sx: { width: "100% " }
+                                                }}
+                                                variant="outlined"
+                                                onChange={onFChange}
+                                                value={field.value}
+                                                type="text"
+                                                error={error?.message ? true : false}
+                                                helperText={error?.message}
+                                            />
+                                        </FormControl>
+                                    )}
+                                />
+
+                            </Grid>
+                            <Grid item xs={6}>
+                                <Controller
+                                    control={control}
+                                    name="method"
+                                    render={({ field, fieldState: { error } }): any => (
+                                        <FormControl sx={{ width: "100%" }}>
+                                            <InputLabel id="demo-simple-select-standard-label">Метод</InputLabel>
+                                            <Select
+                                                value={field.value}
+                                                labelId="demo-simple-select-standard-label"
+                                                label="Метод"
+                                                onChange={onMethodChange}
+                                                error={error?.message ? true : false}
+                                                variant="outlined"
+                                            >
+                                                <MenuItem value={"mid"}>Средних прямоугольников</MenuItem>
+                                                <MenuItem value={"left"}>Левых прямоугольников</MenuItem>
+                                                <MenuItem value={"right"}>Правых прямоугольников</MenuItem>
+                                                <MenuItem value={"trapez"}>Трапеций</MenuItem>
+                                            </Select>
+                                        </FormControl>
+                                    )}
+                                />
+                            </Grid>
+                            <Grid item xs={6}>
+                                <Controller
+                                    control={control}
+                                    name="a"
+                                    render={({ field, fieldState: { error } }): any => (
+                                        <FormControl sx={{ width: "100%" }}>
+                                            <TextField id="outlined-basic"
+                                                InputProps={{
+                                                    startAdornment: <InputAdornment position="start">a = </InputAdornment>,
+                                                }}
+                                                variant="outlined"
+                                                onChange={onAChange}
+                                                value={field.value}
+                                                type="text"
+                                                error={error?.message ? true : false}
+                                                helperText={error?.message}
+                                                FormHelperTextProps={{
+                                                    sx: {
+                                                        position: "absolute",
+                                                        top: '60px'
+                                                    }
+                                                }}
+                                            />
+                                        </FormControl>
+
+                                    )}
+                                />
+
+                            </Grid>
+                            <Grid item xs={6}>
+                                <Controller
+                                    control={control}
+                                    name="b"
+                                    render={({ field, fieldState: { error } }): any => (
+                                        <FormControl sx={{ width: "100%" }}>
+                                            <TextField id="outlined-basic"
+                                                InputProps={{
+                                                    startAdornment: <InputAdornment position="start">b = </InputAdornment>,
+                                                    sx: { maxWidth: '300px' }
+                                                }}
+                                                variant="outlined"
+                                                onChange={onBChange}
+                                                value={field.value}
+                                                type="text"
+                                                error={error?.message ? true : false}
+                                                helperText={error?.message}
+                                                FormHelperTextProps={{
+                                                    sx: {
+                                                        position: "absolute",
+                                                        top: '60px'
+                                                    }
+                                                }}
+                                            />
+                                        </FormControl>
+
+                                    )}
+                                />
+                            </Grid>
+                            <Grid item xs={6}>
+                                <Controller
+                                    control={control}
+                                    name="n"
+                                    render={({ field, fieldState: { error } }): any => (
+                                        <FormControl sx={{ width: "100%" }}>
+                                            <TextField id="outlined-basic"
+                                                InputProps={{
+                                                    startAdornment: <InputAdornment position="start">n = </InputAdornment>,
+                                                    sx: { maxWidth: '300px' }
+                                                }}
+                                                variant="outlined"
+                                                onChange={onNChange}
+                                                value={field.value}
+                                                type="text"
+                                                error={error?.message ? true : false}
+                                                helperText={error?.message}
+                                                FormHelperTextProps={{
+                                                    sx: {
+                                                        position: "absolute",
+                                                        top: '60px'
+                                                    }
+                                                }}
+                                            />
+                                        </FormControl>
+
+                                    )}
+                                />
+                            </Grid>
+                            <Grid item xs={6}>
+                                <Controller
+                                    control={control}
+                                    name="roundTo"
+                                    render={({ field }): any => (
+                                        <FormControl sx={{ width: "80%", margin: "0 auto", display: "flex", justifyContent: "center" }}>
+                                            <Typography gutterBottom>Знаков после запятой:</Typography>
+                                            <Box sx={{ display: "flex", alignItems: "center", gap: "20px", width: "100%" }}>
+                                                <Slider
+                                                    aria-label="Temperature"
+                                                    valueLabelDisplay="off"
+                                                    step={1}
+                                                    marks
+                                                    min={1}
+                                                    max={10}
+                                                    value={field.value}
+                                                    onChange={onRoundToChange}
+                                                />
+                                                <span>
+                                                    {getValues().roundTo}
+                                                </span>
+                                            </Box>
+                                        </FormControl>
+
+                                    )}
+                                />
+
+                            </Grid>
+                        </Grid>
+                        <p>Результат <Latex>{`$$ = ${roundTo(sum, getValues().roundTo)}$$`}</Latex>, контроль <Latex>{`$$ = ${roundTo(reference, getValues().roundTo)}$$`}</Latex>, ошибка <Latex>{`$$ = ${roundTo(sum - reference, getValues().roundTo)}$$`}</Latex></p>
                         <Plot
                             data={data}
-                            layout={{ width: 600, height: 400 }}
+                            layout={{ width: 800, height: 400 }}
                         />
-                        <Box sx={{ flex: '1 1 0px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                            <Button type="submit">
+                        <Box sx={{ flex: '1 1 0px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: "10px" }}>
+                            <Button type="submit" variant='contained'>
                                 Решить
                             </Button>
-                            <Button type="reset" onClick={(): void => onReset()}>
+                            <Button type="reset" onClick={(): void => onReset()} variant='outlined'>
                                 Сброс
                             </Button>
                         </Box>
